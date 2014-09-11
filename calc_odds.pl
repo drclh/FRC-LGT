@@ -1,0 +1,164 @@
+#!c:\perl -w
+
+use strict;
+use warnings;
+use diagnostics;
+use Statistics::ChisqIndep;
+use Text::NSP::Measures::2D::Fisher::right;
+
+=head1 DESCRIPTION
+
+Assume that the frequency count data associated with a bigram
+<word1><word2> is stored in a 2x2 contingency table:
+
+          word2   ~word2
+  word1    n11      n12 | n1p
+ ~word1    n21      n22 | n2p
+           --------------
+           np1      np2   npp
+
+where n11 is the number of times <word1><word2> occur together, and
+n12 is the number of times <word1> occurs with some word other than
+word2, and n1p is the number of times in total that word1 occurs as
+the first word in a bigram.
+
+The odds ratio computes the ratio of the number of times that
+the words in a bigram occur together (or not at all) to the
+number of times the words occur individually. It is the cross
+product of the diagonal and the off-diagonal.
+
+Thus, ODDS RATIO = n11*n22/n21*n12
+
+if n21 and/or n12 is 0, then each zero value is "smoothed" to one to
+avoid a zero in the denominator.
+
+=over
+
+=cut
+
+my %ref_count;
+my %bact_count;
+my $stats_ref;
+my @orgs;
+my %cog_names;
+
+open (REF_FILE, "FRC_abund.txt");
+
+while (<REF_FILE>) {
+	chomp (my ($func_id, $func_name, @counts) = split /\t/);
+	if ($func_id eq 'Func_id') {
+		@orgs = @counts;
+	} else {
+		$cog_names{$func_id} = $func_name unless $cog_names{$func_id};
+		foreach my $i (0..$#orgs) {
+			$ref_count{$func_id}{'counts'}{$orgs[$i]} += $counts[$i];
+			$ref_count{$func_id}{'counts'}{'all_ref'} += $counts[$i];
+		}
+	}
+}
+
+close REF_FILE;
+open (IN_LIST, "abun_file_list.txt");
+
+while (<IN_LIST>) {
+	chomp;
+	open (IN, $_);
+	while (<IN>) {
+		chomp (my ($func_id, $func_name, @counts) = split /\t/);
+		if ($func_id eq 'Func_id') {
+			@orgs = @counts;
+		} else {
+			$cog_names{$func_id} = $func_name unless $cog_names{$func_id};
+			foreach my $i (0..$#orgs) {
+				$bact_count{$func_id}{'counts'}{$orgs[$i]} += $counts[$i];
+				$bact_count{$func_id}{'counts'}{'all_bact'} += $counts[$i];
+			}
+		}
+	}
+}
+
+$stats_ref = &calculateOdds({%ref_count}, {%bact_count});
+
+#open (OUT, ">FRC_odds.txt");
+#print OUT "Reference Organism\tCOG\tCOG Function\t#COGXXX in reference\t#COGs in reference\t#COGXXXX in bact\t#COGs in bact\tOdds Ratio\tChi Squared Value\tp value\tFisher's Exact Test (1-tailed right)\n";
+
+grep {
+	my $cog = $_;
+	my $name = $cog_names{$cog};
+	grep {
+		my $org = $_;
+		my $odds_ratio = sprintf( "%.3f", $stats_ref->{$cog}{$org}{'odds ratio'} );
+		my $chi_value = sprintf( "%.3f", $stats_ref->{$cog}{$org}{'chi'}{'chisq_statistic'} );
+		my $chi_p_value = sprintf( "%.3f", $stats_ref->{$cog}{$org}{'chi'}{'p_value'} );
+		my $fisher_right = sprintf( "%.3f", $stats_ref->{$cog}{$org}{'fisher_right'} );
+		my $ref_COG = $stats_ref->{$cog}{$org}{'counts'}{'ref_COG'};
+		my $ref_all = $stats_ref->{$cog}{$org}{'counts'}{'ref_all'};
+		my $bact_COG = $stats_ref->{$cog}{$org}{'counts'}{'bact_COG'};
+		my $bact_all = $stats_ref->{$cog}{$org}{'counts'}{'bact_all'};
+#		print OUT "$org\t$cog\t$name\t$ref_COG\t$ref_all\t$bact_COG\t$bact_all\t$odds_ratio\t$chi_value\t$chi_p_value\t$fisher_right\n";
+	} sort keys %{ $stats_ref->{$cog} };
+} sort keys %{ $stats_ref };
+
+my $temp;
+
+sub calculateOdds {
+	my ($references, $all) = @_;
+	my (%a, %b, %c, $d);
+	my %stats;
+  
+	grep { # parse references
+		my $cog = $_;
+		grep {
+			my $org = $_;
+			my $name = $references->{$cog}{'name'};
+			$a{$cog}{$org} = $references->{$cog}{'counts'}{$org};
+			$b{$org} += $references->{$cog}{'counts'}{$org};
+		} sort keys %{ $references->{$cog}{'counts'} };
+	} sort keys %{ $references };
+
+	grep { # parse all bacteria
+		my $cog = $_;
+		grep {
+			my $org = $_;
+			$c{$cog} += $all->{$cog}{'counts'}{$org};
+			$d += $all->{$cog}{'counts'}{$org};
+		} sort keys %{ $all->{$cog}{'counts'} };
+	} sort keys %{ $all };
+
+	grep { # calculate odds ratio, chi squared
+		my $cog = $_;
+		grep {
+			my $org = $_;
+			
+			my ($local_a, $local_b, $local_c) = ($a{$cog}{$org}, $b{$org}, $c{$cog});
+			$local_c = 1 if $local_c == 0;
+			$stats{$cog}{$org}{'odds ratio'} = sprintf ( "%.2f", ($local_a/$local_b) / ($local_c/$d) );
+
+			my $chisq = new Statistics::ChisqIndep;
+			my @obs = ([$local_a, $local_b], [$local_c, $d]);
+			$chisq->load_data(\@obs);
+
+			my $n1p = $local_a + $local_b;
+			my $np1 = $local_a + $local_c;
+			my $npp = $n1p + $local_b + $d;
+			my $right_value = calculateStatistic( 
+				n11=>$local_a,
+		                n1p=>$n1p,
+                                np1=>$np1,
+                                npp=>$npp
+                        );
+			
+			$stats{$cog}{$org}{'counts'} = {
+				'ref_COG' => $local_a,
+				'ref_all' => $local_b,
+				'bact_COG' => $local_c,
+				'bact_all' => $d
+			};
+			$stats{$cog}{$org}{'chi'} = $chisq;
+			$stats{$cog}{$org}{'fisher_right'} = $right_value;
+
+		} sort keys %{ $a{$cog} };
+	} sort keys %a;
+	
+	return { %stats };;
+}
