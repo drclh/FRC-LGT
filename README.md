@@ -277,7 +277,7 @@ Raw Data Files
 							
 Scripts
 
-	AbundToMatrix.R (R)
+	CalcOddsRatios.R (R)
 		Inputs
 			files - vector of raw abundance files (IMG format) to be concatenated together
 			sample - raw sample abundance file (IMG format)
