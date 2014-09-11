@@ -277,7 +277,7 @@ Raw Data Files
 							
 Scripts
 
-	AbundToMatrix.R (R file)
+	AbundToMatrix.R (R)
 		Inputs
 			files - vector of raw abundance files (IMG format) to be concatenated together
 			sample - raw sample abundance file (IMG format)
@@ -288,6 +288,16 @@ Scripts
 		Dependencies
 			bstats (for odds ratio calculation)
 			data.table (for data reading)
+
+	calc_odds.pl (Perl)
+		Inputs
+			infile - sample COG abundance input file (IMG format)
+			outfile - output file for odds ratio results
+			sample_included - "yes" or "no" depending on if sample data is included in the input abundance data
+		Dependencies
+			Statistics::ChisqIndep
+			Text::NSP::Measures::2D::Fisher::right
+			Getopt::Long
 
 Processed Data Files
 
