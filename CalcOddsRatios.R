@@ -1,4 +1,4 @@
-AbundToMatrix <- function (all, sample, cogs, group = "yes", log = "yes") { # default to ln(OR)
+CalcOddsRatios <- function (all, sample, cogs, group = "yes", log = "yes") { # default to ln(OR)
 
 # process all bacteria data and return numerical matrix
   
