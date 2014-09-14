@@ -277,7 +277,7 @@ Raw Data Files
 							
 Scripts
 
-	CalcOddsRatios.R (R)
+	CalcOddsRatios.R (R) (incomplete)
 		Inputs
 			files - vector of raw abundance files (IMG format) to be concatenated together
 			sample - raw sample abundance file (IMG format)
@@ -312,4 +312,4 @@ Experimental Design
 	7)	Calculate ln(odds ratios) for all COGs in each bacteria
 	8)	chi square test to identify significantly overabundant COGs
 	9)	Select desired COGs
-	10)	Create heat map using vegan heatmap2
+	10)	Create heat map using gplot heatmap2
